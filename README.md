@@ -1,6 +1,6 @@
 # Maximum Entropy Melody Generator
 
-A melody generation system implementing a Maximum Entropy model.
+A melody generation system implementing a Maximum Entropy approach with the Ising/Potts model.
 It is based on the paper:
 Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melodic styles. Sci Rep 7, 9172 (2017). https://doi.org/10.1038/s41598-017-08028-4
 
@@ -16,6 +16,7 @@ Number of parameters is (vocabulary_size + K * vocabulary_size^2), with K typica
 ## Features
 
 - Both a pedagogical and an efficient implementation of a Maximum Entropy model for melody generation.
+The two implementations are equivalent. 
 The pedagogical implementation is useful to understand the approach and the model.
 The efficient implementation is useful for trying examples
 - Examples on MIDI files and character sequences
