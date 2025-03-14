@@ -25,8 +25,8 @@ The efficient implementation is useful for trying examples
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/max-entropy-music.git
-cd max-entropy-melody-generator
+git clone https://github.com/fpachet/max-entropy-music.git
+cd max_entropy_music
 ```
 
 2. Install the required dependencies:
@@ -45,7 +45,7 @@ mido~=1.3.3
 ## Usage
 
 ```python
-from core.max_entropy import MaxEntropyModel
+from mem.algo import MaxEntropyModel
 from utils.midi_processor import MIDIProcessor
 
 # Initialize the model
@@ -63,21 +63,6 @@ new_melody = model.generate(length=32)
 
 # Save the generated melody
 processor.save_midi(new_melody, 'output.midi')
-```
-
-## Project Structure
-
-```
-├── mem/
-│   ├── max_entropy.py        # Main implementation of MaxEntropy model
-│   └── model_utils.py        # Utility functions for model operations
-├── data/
-│   └── midi/                 # Directory for MIDI training data
-├── utils/
-│   ├── midi_processor.py     # MIDI file processing utilities
-│   └── data_utils.py         # Data preprocessing utilities
-├── requirements.txt          # Project dependencies
-└── README.md                 # Project documentation
 ```
 
 ## Contributing
