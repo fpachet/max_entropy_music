@@ -1,15 +1,18 @@
 # Maximum Entropy Melody Generator
 
-A melody generation system implementing an efficient Maximum Entropy model.
+A melody generation system implementing a Maximum Entropy model.
 It is based on the paper:
 Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melodic styles. Sci Rep 7, 9172 (2017). https://doi.org/10.1038/s41598-017-08028-4
 
 which is available at: https://www.nature.com/articles/s41598-017-08028-4
 
-
+## Authors
+- [François Pachet](https://github.com/fpachet)
+- [Pierre Roy](https://github.com/roypie)
+ 
 ## Features
 
-- Both a pedagogical and an efficient implementation of Maximum Entropy models for melody generation
+- Both a pedagogical and an efficient implementation of Maximum Entropy models for melody generation.
 - Examples on MIDI files and character sequences
 
 ## Installation
