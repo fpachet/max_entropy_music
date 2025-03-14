@@ -6,13 +6,18 @@ Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melo
 
 which is available at: https://www.nature.com/articles/s41598-017-08028-4
 
+It captures longer range interactions than Markov models (up to K) without the need for exponential amount of training data.
+Number of parameters is (vocabulary_size + K * vocabulary_size^2), with K typically about 10.
+
 ## Authors
 - [François Pachet](https://github.com/fpachet)
 - [Pierre Roy](https://github.com/roypie)
  
 ## Features
 
-- Both a pedagogical and an efficient implementation of Maximum Entropy models for melody generation.
+- Both a pedagogical and an efficient implementation of a Maximum Entropy model for melody generation.
+The pedagogical implementation is useful to understand the approach and the model.
+The efficient implementation is useful for trying examples
 - Examples on MIDI files and character sequences
 
 ## Installation
