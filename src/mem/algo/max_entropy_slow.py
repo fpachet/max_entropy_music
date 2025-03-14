@@ -212,19 +212,16 @@ class MaxEntropyMelodyGenerator:
 
 if __name__ == "__main__":
     # Utilisation
-    # generator = MaxEntropyMelodyGenerator("../data/test_sequence_3notes.mid", Kmax=2)
-    # generator = MaxEntropyMelodyGenerator("../data/test_sequence_2notes.mid", Kmax=3)
-    # generator = MaxEntropyMelodyGenerator("../data/test_sequence_arpeggios.mid", Kmax=10)
-    # generator = MaxEntropyMelodyGenerator("../data/bach_partita_mono.midi", Kmax=10)
-    # generator = MaxEntropyMelodyGenerator("../data/partita_violon_jason.mid", Kmax=10)
-    # generator = MaxEntropyMelodyGenerator("../data/prelude_c.mid", Kmax=10)
+    # generator = MaxEntropyMelodyGenerator("../../../data/bach_partita_mono.midi", Kmax=10)
+    # generator = MaxEntropyMelodyGenerator("../../../data/partita_violin.mid", Kmax=10)
+    # generator = MaxEntropyMelodyGenerator("../../../data/prelude_c.mid", Kmax=10)
     generator = MaxEntropyMelodyGenerator("../../../data/bach_jesus_joy.mid", Kmax=3)
-    # generator = MaxEntropyMelodyGenerator("../data/jason examples/Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
-    # [generator, h_opt, J_opt] = pickle.load(open("../data/artita_violon_jason.p", "rb"))
+    # generator = MaxEntropyMelodyGenerator("../../../data//Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
+    # [generator, h_opt, J_opt] = pickle.load(open("../../../data/partita_violin.p", "rb"))
     h_opt, J_opt = generator.train(max_iter=10)
     print(f"{h_opt=}")
     print(f"{J_opt=}")
-    # pickle.dump([generator, h_opt, J_opt], open("../data/jason examples/martino.p", "wb"))
+    # pickle.dump([generator, h_opt, J_opt], open("../../../data/partita_violin.p", "wb"))
     generated_sequence = generator.generate_sequence(
         h_opt, J_opt, burn_in=4000, length=300
     )
