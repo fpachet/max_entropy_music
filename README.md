@@ -18,7 +18,7 @@ Number of parameters is (vocabulary_size + K * vocabulary_size^2), with K typica
 - Both a pedagogical and an efficient implementation of a Maximum Entropy model for melody generation.
 The two implementations are equivalent. 
 The pedagogical implementation is useful to understand the approach and the model.
-The efficient implementation is useful for trying examples
+The efficient implementation is about 100 X faster, and is useful for trying examples
 - Examples on MIDI files and character sequences
 
 ## Installation
