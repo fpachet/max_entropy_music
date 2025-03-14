@@ -170,7 +170,7 @@ class MaxEntropyMelodyGenerator:
             for k in range(self.Kmax)
         }
 
-    def generate_sequence_paper(self, h, J, length=20, burn_in=1000):
+    def generate_sequence(self, h, J, length=20, burn_in=1000):
         # generate sequence of note indexes
         sequence = [random.choice(self.seq) for _ in range(length)]
         for _ in range(burn_in):
@@ -225,10 +225,7 @@ if __name__ == "__main__":
     print(f"{h_opt=}")
     print(f"{J_opt=}")
     # pickle.dump([generator, h_opt, J_opt], open("../data/jason examples/martino.p", "wb"))
-    # generated_sequence = generator.generate_sequence_metropolis(
-    #     h_opt, J_opt, burn_in=10000, length=200
-    # )
-    generated_sequence = generator.generate_sequence_paper(
+    generated_sequence = generator.generate_sequence(
         h_opt, J_opt, burn_in=4000, length=300
     )
     generator.save_midi(generated_sequence, "../../../data/maxent-generated_melody.mid")
