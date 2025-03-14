@@ -6,7 +6,7 @@ from scipy.optimize import minimize
 import random
 import pickle
 
-from utils.profiler import timeit
+# from utils.profiler import timeit
 
 """
 A more efficient version of the Max Entropy paper.
