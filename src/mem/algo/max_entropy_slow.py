@@ -6,15 +6,12 @@ from scipy.optimize import minimize
 import random
 import pickle
 
-# from utils.profiler import timeit
-
 """
-A more efficient version of the Max Entropy paper.
-Implementation follows the paper quite closely.
-contexts are created only once.
-Partition functions computed only when necessary
+A working version of the Max Entropy paper.
+Implementation follows the paper closely.
+Contexts are created only once, partition functions computed only when necessary
 negative_log_likelihood and gradient computed together (option jac=True in scipy.minimize),
-which reduces the number of computations needed
+to reduce the number of computations needed
 """
 
 
@@ -33,14 +30,6 @@ class MaxEntropyMelodyGenerator:
         for mu in range(len(self.seq)):
             self.all_contexts[mu] = self.build_context(self.seq, mu)
         self.all_partitions = np.zeros(len(self.seq))
-        self.cpt_sum_energy = 0
-        self.cpt_compute_partition = 0
-        self.cpt_compute_likelihood = 0
-        self.cpt_compute_gradient = 0
-        self.negative_log_likelihood_and_gradient_cpt = 0
-        self.elapsed_ns_in_sum_energy_in_context = 0
-        self.elapsed_ns_in_compute_partition = 0
-        self.elapsed_ns_in_negative_log_likelihood_and_gradient = 0
 
     def extract_notes(self) -> list[int]:
         """Extracts MIDI note sequence from a MIDI file."""
@@ -57,7 +46,6 @@ class MaxEntropyMelodyGenerator:
 
     # @profile
     def sum_energy_in_context(self, J, context, center):
-        self.cpt_sum_energy += 1
         t0 = time.perf_counter_ns()
         # center is not necessarily the center of context
         energy = 0
@@ -67,18 +55,14 @@ class MaxEntropyMelodyGenerator:
                 energy += j_k[context.get(-k - 1), center]
             if k + 1 in context:
                 energy += j_k[center, context.get(k + 1)]
-        self.elapsed_ns_in_sum_energy_in_context += time.perf_counter_ns() - t0
         return energy
 
     def compute_partition_function(self, h, J, context):
         # return np.exp([h[sigma] + self.sum_energy_in_context(J, context, sigma) for sigma in range(self.vocabulary_size())]).sum()
-        t0 = time.perf_counter_ns()
-        self.cpt_compute_partition += 1
         z = 0
         for sigma in range(self.voc_size):
             energy = h[sigma] + self.sum_energy_in_context(J, context, sigma)
             z += np.exp(energy)
-        self.elapsed_ns_in_compute_partition += time.perf_counter_ns() - t0
         return z
 
     # @profile
@@ -89,8 +73,6 @@ class MaxEntropyMelodyGenerator:
         return context
 
     def negative_log_likelihood_and_gradient(self, params):
-        t0 = time.perf_counter_ns()
-        self.negative_log_likelihood_and_gradient_cpt += 1
         voc_size = self.voc_size
         # unflatten h and J parameters
         h = params[:voc_size]
@@ -105,19 +87,13 @@ class MaxEntropyMelodyGenerator:
         self.all_partitions = np.zeros(len(self.seq))
         self.compute_all_Z(J, h)
         result = self.negative_log_likelihood(h, J), self.gradient(h, J)
-        self.elapsed_ns_in_negative_log_likelihood_and_gradient += (
-                time.perf_counter_ns() - t0
-        )
         return result
 
-    @timeit
     def compute_all_Z(self, J, h):
         self.all_partitions = [self.compute_partition_function(h, J, self.all_contexts[mu]) for mu in
                                range(len(self.seq))]
 
-    @timeit
     def negative_log_likelihood(self, h, J):
-        self.cpt_compute_likelihood += 1
         loss = 0
         M = len(self.seq)
         for i, s_0 in enumerate(self.seq):
@@ -132,9 +108,7 @@ class MaxEntropyMelodyGenerator:
         print(f"{loss=}")
         return loss
 
-    @timeit
     def gradient(self, h, J):
-        self.cpt_compute_gradient += 1
         grad_h = np.zeros_like(h)
         grad_J = {k: np.zeros_like(J[k]) for k in range(self.Kmax)}
         M = len(self.seq)
@@ -196,29 +170,6 @@ class MaxEntropyMelodyGenerator:
             for k in range(self.Kmax)
         }
 
-    def generate_sequence_metropolis(self, h, J, length=20, burn_in=1000):
-        # generate sequence of note indexes
-        sequence = [random.choice(self.seq) for _ in range(length)]
-        for _ in range(burn_in):
-            idx = random.randint(0, length - 1)
-            current_note = sequence[idx]
-            context = self.build_context(sequence, idx)
-            current_energy = h[current_note] + self.sum_energy_in_context(
-                J, context, current_note
-            )
-            proposed_note = random.choice(
-                [elt for elt in range(self.voc_size) if elt != current_note]
-            )
-            proposed_energy = h[proposed_note] + self.sum_energy_in_context(
-                J, context, proposed_note
-            )
-            acceptance_ratio = min(1, np.exp(proposed_energy - current_energy))
-            if random.random() < acceptance_ratio:
-                sequence[idx] = proposed_note
-        # build sequence of notes
-        result = [self.idx_to_note[i] for i in sequence]
-        return result
-
     def generate_sequence_paper(self, h, J, length=20, burn_in=1000):
         # generate sequence of note indexes
         sequence = [random.choice(self.seq) for _ in range(length)]
@@ -233,7 +184,6 @@ class MaxEntropyMelodyGenerator:
             proposed_note = np.random.choice(range(self.voc_size), p=energies)
             sequence[idx] = proposed_note
         # build sequence of notes
-        generator.save_midi([self.idx_to_note[i] for i in sequence], "../data/temp_NEWMetrogenerated_melody.mid")
         seq2 = self.generate_sequence_final_checks(sequence, h, J)
         result = [self.idx_to_note[i] for i in seq2]
         return result
@@ -259,13 +209,6 @@ class MaxEntropyMelodyGenerator:
             track.append(mido.Message("note_on", note=note, velocity=64, time=0))
             track.append(mido.Message("note_off", note=note, velocity=64, time=120))
         mid.save(output_file)
-        # plays the file approximatively, can be heard of Logic is open
-        # with mido.open_output() as output:
-        #     for note in sequence:
-        #         output.send(mido.Message("note_on", note=note, velocity=64))
-        #         time.sleep(0.3)
-        #         output.send(mido.Message("note_off", note=note, velocity=64))
-
 
 if __name__ == "__main__":
     # Utilisation
@@ -278,26 +221,10 @@ if __name__ == "__main__":
     generator = MaxEntropyMelodyGenerator("../data/jason examples/bach_jesus_joy.mid", Kmax=3)
     # generator = MaxEntropyMelodyGenerator("../data/jason examples/Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
     # [generator, h_opt, J_opt] = pickle.load(open("../data/artita_violon_jason.p", "rb"))
-    t0 = time.perf_counter_ns()
     h_opt, J_opt = generator.train(max_iter=10)
     print(f"{h_opt=}")
     print(f"{J_opt=}")
-    t1 = time.perf_counter_ns()
     # pickle.dump([generator, h_opt, J_opt], open("../data/jason examples/martino.p", "wb"))
-    print(f"total time: {(t1 - t0) / 1000000}")
-    print(
-        f"time in sum_energy_in_context: {generator.elapsed_ns_in_sum_energy_in_context / 1000000}ms"
-    )
-    print(
-        f"time in compute_partition: {generator.elapsed_ns_in_compute_partition / 1000000}ms"
-    )
-    print(
-        f"time in log_likelihood_and_gradient: {generator.elapsed_ns_in_negative_log_likelihood_and_gradient / 1000000}ms"
-    )
-    print(f"{generator.cpt_sum_energy=}")
-    print(f"{generator.cpt_compute_partition=}")
-    print(f"{generator.cpt_compute_gradient=}")
-    print(f"{generator.cpt_compute_likelihood=}")
     # generated_sequence = generator.generate_sequence_metropolis(
     #     h_opt, J_opt, burn_in=10000, length=200
     # )
