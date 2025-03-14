@@ -16,7 +16,7 @@ which is available at: https://www.nature.com/articles/s41598-017-08028-4
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/max-entropy-melody-generator.git
+git clone https://github.com/yourusername/max-entropy-music.git
 cd max-entropy-melody-generator
 ```
 
