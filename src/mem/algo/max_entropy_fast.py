@@ -1,6 +1,12 @@
 """
-Implementation of paper (see README.md), using mostly numpy arrays.
+Implementation of paper (see README.md), using numpy arrays whenever possible to
+avoid Python loops. Compared to the slow implementation, this provides a significant
+speedup to the price of more complex code.
 """
+
+from __future__ import annotations
+
+from typing import Sized
 
 import numpy as np
 import numpy.typing as npt
@@ -8,9 +14,6 @@ import tqdm
 from scipy.optimize import minimize
 
 from . import NDArrayInt, NDArrayFloat, FloatType, IdxType
-
-
-# from utils.profiler import Timeit
 
 
 class MaxEnt:
@@ -44,26 +47,40 @@ class MaxEnt:
         Z: npt.NDArray[float] — 1D-numpy array of shape (M), Z[µ] is the partition
             function for the context centered around the symbol at position µ.
 
-        context_ix: NDArrayInt — 3D-numpy array of shape (M, 3, 2•kmax), context_ix[µ]
-            is the indices of the interaction potentials of the context centered around
-            symbol index S[µ].
-
         partition_ix: NDArrayInt — 4D-numpy array of shape (M, q, 3, 2•kmax),
             partition_ix[µ, σ] is the indices of the interaction potentials of the
             context centered around symbol index S[µ] with the center replaced by
             symbol index σ.
 
-        J5: tuple[NDArrayInt, ...] — a tuple of 1D-numpy arrays of shape (M•q•3•2•kmax),
-            J5 is created by reshaping partition_ix into a tuple of 3 1D-arrays; the
-            first array contains distances to the center of a context; the second array
-            is the index of a left symbol in a context; the third array is the index of
-            a right symbol in a context; J5 is used to get in a single numpy access all
-            the interaction potentials for all contexts in the training sequence using
-            self.J[self.J5]; this is a lot faster than using for loops; this is used to
-            compute Formula 5.
+        J5: tuple[NDArrayInt, ...] — a tuple of 1D-numpy arrays of shape (M•2•kmax),
+            J5 is created by reshaping context indices into a tuple of 3 1D-arrays;
+            the first array contains distances to the center of a context; the second
+            array is the index of a left symbol in a context; the third array is the
+            index of a right symbol in a context; J5 is used to get in a single numpy
+            access all the interaction potentials for all contexts in the training
+            sequence using self.J[self.J5]; this is a lot faster than using for loops;
+            this is used to compute Formula 5.
 
-        K7: npt.NDArray[bool] — 2D-numpy array of shape (q, M), K7[σ, mu] is True if, and
-            only if, S[µ] == σ; this is used to compute Formula 7.
+        J6: tuple[NDArrayInt, ...] — a tuple of 1D-numpy arrays of shape (M•2•kmax•q),
+            J6 is created by reshaping partition_ix into a tuple of three 1D-arrays;
+            the first array contains distances to the center of a context; the second
+            array is the index of a left symbol in a context; the third array is the
+            index of a right symbol in a context; J6 is used to get in a single numpy
+            access all the interaction potentials for all contexts needed to compute
+            Formula 6 using self.J[self.J6]; this is a lot faster than using for loops.
+
+        J7: tuple[NDArrayInt, ...] — a tuple of 1D-numpy arrays of shape (q•M•2•kmax),
+            J7 is created by reshaping partition_ix into a tuple of three 1D-arrays;
+            the first array contains distances to the center of a context; the second
+            array is the index of a left symbol in a context; the third array is the
+            index of a right symbol in a context; J7 is used to get in a single numpy
+            access all the interaction potentials for all contexts needed to compute
+            Formula 7 using self.J[self.J7]; this is a lot faster than using for loops.
+
+        K7: npt.NDArray[bool] — 2D-numpy array of shape (q, M), K7[σ, mu] is True if,
+            and only if, S[µ] == σ; this is used to compute Formula 7.
+
+        l: float — the regularization parameter, λ in the paper.
     """
 
     PADDING = -1
@@ -77,7 +94,6 @@ class MaxEnt:
     C: NDArrayInt
     Z: npt.NDArray[FloatType]
 
-    context_ix: NDArrayInt
     partition_ix: NDArrayInt
     J5: tuple[NDArrayInt, ...]
     J6: tuple[NDArrayInt, ...]
@@ -85,16 +101,17 @@ class MaxEnt:
 
     K7: npt.NDArray[bool]
 
-    # λ in the paper, the lambda regularization parameter
     l: float
 
+    checkpoint_index: int
+
     def __init__(
-            self,
-            index_training_seq: list[int],
-            *,
-            q: int,
-            kmax,
-            l=1.0,
+        self,
+        index_training_seq: Sized[int],
+        *,
+        q: int,
+        kmax,
+        l=1.0,
     ):
         self.S: NDArrayInt = np.array(index_training_seq, dtype=IdxType)
         self.M: int = len(self.S)
@@ -120,33 +137,30 @@ class MaxEnt:
         _indices = compute_context_indices(self.C, self.K)
         _indices = np.swapaxes(_indices, 0, 1)
         _indices = np.reshape(_indices, (3, -1))
-        self.J5 = tuple(row for row in _indices)
+        self.J5 = tuple(_indices)
 
-        # get the indices in J of the contexts prepared in such a way that J[self.Z_ix]
-        # returns the potential values for all contexts in a single 1D-array
-        # see compute_z() for more details on how this is used
         self.partition_ix = compute_partition_context_indices(
             self.C, q=self.q, kmax=self.K
-        )
-        _indices = self.partition_ix  # (M, q, 3, 2•K)
-        _indices = np.swapaxes(_indices, 1, 2)  # (M, 3, q, 2•K)
+        )  # shape is (M, q, 3, 2•K)
+        _indices = np.swapaxes(self.partition_ix, 1, 2)  # (M, 3, q, 2•K)
         _indices = np.reshape(_indices, (self.M, 3, -1))  # (M, 3, 2•K•q)
         _indices = np.swapaxes(_indices, 0, 1)  # (3, M, 2•K•q)
         _indices = np.reshape(_indices, (3, -1))  # (3, M•2•K•q)
-        self.J6 = tuple(row for row in _indices)
+        self.J6 = tuple(_indices)
 
-        _indices = self.partition_ix  # (M, q, 3, 2•K)
-        _indices = np.swapaxes(_indices, 0, 1)  # (q, M, 3, 2•K)
+        _indices = np.swapaxes(self.partition_ix, 0, 1)  # (q, M, 3, 2•K)
         _indices = np.swapaxes(_indices, 1, 2)  # (q, 3, M, 2•K)
         _indices = np.swapaxes(_indices, 0, 1)  # (3, q, M, 2•K)
         _indices = np.reshape(_indices, (3, -1))  # (3, q•M•2•K)
-        self.J7 = tuple(row for row in _indices)
+        self.J7 = tuple(_indices)
 
         self.K7 = np.equal(np.arange(self.q)[:, None], self.S[None, :])
 
-        # get the partition context indices and converts the 4D-array of shape (M, q, 3, 2•kmax) into a list
-        # of length M, each element is a list of length q whose elements are tuple of three 2•kmax numpy vectors
-        # This is to make J[self.partition_context_indices[mu, sigma]] return the result using numpy matrix indexing
+        # get the partition context indices and converts the 4D-array of shape
+        # (M, q, 3, 2•kmax) into a list of length M, each element is a list of length q
+        # whose elements are tuple of three 2•kmax numpy vectors This is to make
+        # J[self.partition_context_indices[mu, sigma]] return the result using numpy
+        # matrix indexing
         _partition_context_indices = compute_partition_context_indices(
             self.C, q=self.q, kmax=self.K
         )
@@ -158,7 +172,6 @@ class MaxEnt:
             self.partition_context_indices.append(matrix_mu_sigma)
 
         self.checkpoint_index = 0
-        self.compute_z()
 
     def save_checkpoint(self, path: str):
         np.savez(
@@ -169,7 +182,21 @@ class MaxEnt:
             K=self.K,
             J=self.J,
             h=self.h,
+            C=self.C,
+            Z=self.Z,
+            partition_ix=self.partition_ix,
+            J5=self.J5,
+            J6=self.J6,
+            J7=self.J7,
+            K7=self.K7,
+            l=self.l,
+            partition_context_indices=self.partition_context_indices,
+            checkpoint_index=self.checkpoint_index,
         )
+
+    @staticmethod
+    def load_checkpoint(path: str) -> MaxEnt:
+        raise NotImplemented("Not implemented yet")
 
     # @Timeit
     def compute_z(self):
@@ -245,7 +272,7 @@ class MaxEnt:
         row_r = self.K7[:]
         row_r2 = np.hstack(
             [
-                self.K7[:, k + 1:],
+                self.K7[:, k + 1 :],
                 np.full((self.q, k + 1), fill_value=False, dtype=bool),
             ]
         )
@@ -277,7 +304,7 @@ class MaxEnt:
         for k in range(self.K):
             kronecker[k] = np.hstack(
                 [
-                    self.K7[:, k + 1:],
+                    self.K7[:, k + 1 :],
                     np.full((self.q, k + 1), fill_value=False, dtype=bool),
                 ]
             )
@@ -316,7 +343,7 @@ class MaxEnt:
     # @Timeit
     def update_arrays_from_params(self, params: NDArrayFloat):
         self.h = params[: self.q]
-        self.J[:, : self.q, : self.q] = params[self.q:].reshape(self.K, self.q, self.q)
+        self.J[:, : self.q, : self.q] = params[self.q :].reshape(self.K, self.q, self.q)
 
     # @Timeit
     def arrays_to_params(self):
@@ -333,7 +360,7 @@ class MaxEnt:
         return self.nll(), flat_grad
 
     def training_callback(self, params):
-        self.save_checkpoint(f"./model-checkpoint-{self.checkpoint_index}")
+        # self.save_checkpoint(f"./model-checkpoint-{self.checkpoint_index}")
         self.checkpoint_index += 1
 
     # @Timeit
@@ -350,10 +377,10 @@ class MaxEnt:
             options={"maxiter": max_iter},
         )
         self.h = res.x[: self.q]
-        self.J[:, : self.q, : self.q] = res.x[self.q:].reshape(self.K, self.q, self.q)
+        self.J[:, : self.q, : self.q] = res.x[self.q :].reshape(self.K, self.q, self.q)
 
     def sum_energy_in_context(
-            self, seq: NDArrayInt, ix: int, center: int | None = None
+        self, seq: NDArrayInt, ix: int, center: int | None = None
     ):
         energy = 0
         for k in range(self.K):
@@ -365,7 +392,7 @@ class MaxEnt:
         # index_seq = np.random.randint(0, self.q, size=length + 2 * self.K)
         index_seq = np.zeros(length + 2 * self.K, dtype=IdxType)
         index_seq[: self.K] = MaxEnt.PADDING
-        index_seq[-self.K:] = MaxEnt.PADDING
+        index_seq[-self.K :] = MaxEnt.PADDING
 
         random_gen = np.random.RandomState(seed=1)
         for _ in range(burn_in):
@@ -385,13 +412,15 @@ class MaxEnt:
             acceptance_ratio = min(1, np.exp(new_energy - current_energy))
             if random_gen.random() < acceptance_ratio:
                 index_seq[pos_in_seq] = new_center
-        return index_seq[self.K: -self.K]
+        return index_seq[self.K : -self.K]
 
-    def sample_index_seq(self, length: int = 20, burn_in: int = 1000):
+    def sample_index_seq(
+        self, length: int = 20, /, *, burn_in: int = 1000
+    ) -> NDArrayInt:
         # generate sequence of note indexes
         index_seq = np.zeros(length + 2 * self.K, dtype=IdxType)
         index_seq[: self.K] = MaxEnt.PADDING
-        index_seq[-self.K:] = MaxEnt.PADDING
+        index_seq[-self.K :] = MaxEnt.PADDING
         for _ in tqdm.tqdm(range(burn_in)):
             pos_in_seq = self.K + np.random.randint(0, length)
             energies = np.zeros(self.q)
@@ -403,10 +432,24 @@ class MaxEnt:
             energies = energies / energies.sum()
             proposed_note = np.random.choice(range(self.q), p=energies)
             index_seq[pos_in_seq] = proposed_note
-        return index_seq[self.K: -self.K]
+        for _ in range(10):
+            self.smooth_sequence(index_seq)
+        return index_seq[self.K : -self.K]
+
+    def smooth_sequence(self, seq):
+        for idx in range(len(seq) - 2 * self.K):
+            energies = np.zeros(self.q, dtype=FloatType)
+            for i in range(self.q):
+                energies[i] = np.exp(
+                    self.h[i] + self.sum_energy_in_context(seq, idx + self.K, i)
+                )
+            energies = energies / energies.sum()
+            best_note = np.where(energies == max(energies))[0][0]
+            seq[idx + self.K] = best_note
+        return seq
 
 
-def compute_contexts(idx_seq: list[int], /, *, kmax: int, padding=-1) -> NDArrayInt:
+def compute_contexts(idx_seq: Sized[int], /, *, kmax: int, padding=-1) -> NDArrayInt:
     """
     Compute all contexts for a given index sequence.
 
@@ -436,7 +479,7 @@ def compute_contexts(idx_seq: list[int], /, *, kmax: int, padding=-1) -> NDArray
     )
 
     for i in np.arange(m):
-        c[i, :] = padded_seq[i: i + l]
+        c[i, :] = padded_seq[i : i + l]
 
     return c
 
@@ -508,7 +551,7 @@ def compute_context_indices_naive(contexts, kmax=0):
             s_0 = contexts[i, kmax]
             s_k = contexts[i, kmax + k + 1]
             s_mk = contexts[i, kmax - k - 1]
-            result[i, 0, 2 * k: 2 * (k + 1)] = k
+            result[i, 0, 2 * k : 2 * (k + 1)] = k
             result[i, 1, 2 * k] = s_mk
             result[i, 1, 2 * k + 1] = s_0
             result[i, 2, 2 * k] = s_0
@@ -517,7 +560,7 @@ def compute_context_indices_naive(contexts, kmax=0):
 
 
 def compute_partition_context_indices(
-        contexts, /, *, q: int, kmax: int = 0
+    contexts, /, *, q: int, kmax: int = 0
 ) -> NDArrayInt:
     """
     Compute the indices of each context in J with respect to each 0 ≤ sigma < q.

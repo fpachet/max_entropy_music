@@ -4,7 +4,8 @@ import numpy as np
 import mido
 from scipy.optimize import minimize
 import random
-import pickle
+
+from mem.midi.midi import save_midi
 
 """
 A working version of the Max Entropy paper.
@@ -78,7 +79,7 @@ class MaxEntropyMelodyGenerator:
         h = params[:voc_size]
         J_flat = params[voc_size:]
         J = {
-            k: J_flat[k * voc_size ** 2: (k + 1) * voc_size ** 2].reshape(
+            k: J_flat[k * voc_size**2 : (k + 1) * voc_size**2].reshape(
                 (voc_size, voc_size)
             )
             for k in range(self.Kmax)
@@ -90,8 +91,10 @@ class MaxEntropyMelodyGenerator:
         return result
 
     def compute_all_Z(self, J, h):
-        self.all_partitions = [self.compute_partition_function(h, J, self.all_contexts[mu]) for mu in
-                               range(len(self.seq))]
+        self.all_partitions = [
+            self.compute_partition_function(h, J, self.all_contexts[mu])
+            for mu in range(len(self.seq))
+        ]
 
     def negative_log_likelihood(self, h, J):
         loss = 0
@@ -135,17 +138,17 @@ class MaxEntropyMelodyGenerator:
                             if r2 == s_0:
                                 prob += 1
                             prob -= (
-                                    np.exp(
-                                        h[r2] + self.sum_energy_in_context(J, context, r2)
-                                    )
-                                    / Z
+                                np.exp(
+                                    h[r2] + self.sum_energy_in_context(J, context, r2)
+                                )
+                                / Z
                             )
                         if mu + k + 1 < M and r2 == self.seq[mu + k + 1]:
                             if r == s_0:
                                 prob += 1
                             prob -= (
-                                    np.exp(h[r] + self.sum_energy_in_context(J, context, r))
-                                    / Z
+                                np.exp(h[r] + self.sum_energy_in_context(J, context, r))
+                                / Z
                             )
                     grad_J[k][r][r2] = -prob / M + (self.lambda_reg / M) * np.abs(
                         J[k][r][r2]
@@ -154,7 +157,7 @@ class MaxEntropyMelodyGenerator:
         return np.concatenate([grad_h, grad_J_flat])
 
     def train(self, max_iter=1000):
-        voc_2 = self.voc_size ** 2
+        voc_2 = self.voc_size**2
         params_init = np.zeros(self.voc_size + self.Kmax * voc_2)
         res = minimize(
             self.negative_log_likelihood_and_gradient,
@@ -165,8 +168,8 @@ class MaxEntropyMelodyGenerator:
         )
         return res.x[: self.voc_size], {
             k: res.x[
-               self.voc_size + k * voc_2: self.voc_size + (k + 1) * voc_2
-               ].reshape((self.voc_size, self.voc_size))
+                self.voc_size + k * voc_2 : self.voc_size + (k + 1) * voc_2
+            ].reshape((self.voc_size, self.voc_size))
             for k in range(self.Kmax)
         }
 
@@ -177,10 +180,9 @@ class MaxEntropyMelodyGenerator:
             idx = random.randint(0, length - 1)
             context = self.build_context(sequence, idx)
             energies = np.zeros(self.voc_size)
-            for i in range (self.voc_size):
-                energies[i] = np.exp(h[i] + self.sum_energy_in_context(
-                J, context, i))
-            energies = energies/energies.sum()
+            for i in range(self.voc_size):
+                energies[i] = np.exp(h[i] + self.sum_energy_in_context(J, context, i))
+            energies = energies / energies.sum()
             proposed_note = np.random.choice(range(self.voc_size), p=energies)
             sequence[idx] = proposed_note
         # build sequence of notes
@@ -193,36 +195,28 @@ class MaxEntropyMelodyGenerator:
             context = self.build_context(sequence, idx)
             energies = np.zeros(self.voc_size)
             for i in range(self.voc_size):
-                energies[i] = np.exp(h[i] + self.sum_energy_in_context(
-                    J, context, i))
+                energies[i] = np.exp(h[i] + self.sum_energy_in_context(J, context, i))
             energies = energies / energies.sum()
             best_note = np.where(energies == max(energies))[0][0]
             sequence[idx] = best_note
         return sequence
 
-    @staticmethod
-    def save_midi(sequence, output_file="generated.mid"):
-        mid = mido.MidiFile()
-        track = mido.MidiTrack()
-        mid.tracks.append(track)
-        for note in sequence:
-            track.append(mido.Message("note_on", note=note, velocity=64, time=0))
-            track.append(mido.Message("note_off", note=note, velocity=64, time=120))
-        mid.save(output_file)
 
 if __name__ == "__main__":
     # Utilisation
     # generator = MaxEntropyMelodyGenerator("../../../data/bach_partita_mono.midi", Kmax=10)
     # generator = MaxEntropyMelodyGenerator("../../../data/partita_violin.mid", Kmax=10)
     # generator = MaxEntropyMelodyGenerator("../../../data/prelude_c.mid", Kmax=10)
-    generator = MaxEntropyMelodyGenerator("../../../data/bach_jesus_joy.mid", Kmax=3)
+    generator = MaxEntropyMelodyGenerator(
+        "../../../data/midi/bach_jesus_joy.mid", Kmax=10
+    )
     # generator = MaxEntropyMelodyGenerator("../../../data//Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
     # [generator, h_opt, J_opt] = pickle.load(open("../../../data/partita_violin.p", "rb"))
-    h_opt, J_opt = generator.train(max_iter=10)
+    h_opt, J_opt = generator.train(max_iter=100)
     print(f"{h_opt=}")
     print(f"{J_opt=}")
     # pickle.dump([generator, h_opt, J_opt], open("../../../data/partita_violin.p", "wb"))
     generated_sequence = generator.generate_sequence(
         h_opt, J_opt, burn_in=4000, length=300
     )
-    generator.save_midi(generated_sequence, "../../../data/maxent-generated_melody.mid")
+    save_midi(generated_sequence, "../../../data/maxent-generated_melody.mid")
