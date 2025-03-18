@@ -10,7 +10,7 @@ from mem.midi.midi import (
 
 from pathlib import Path
 
-from mem.training.training import SequenceGenerator
+from mem.training.generator import SequenceGenerator
 
 if __name__ == "__main__":
     midi_pitches = extract_pitches_from_midi(

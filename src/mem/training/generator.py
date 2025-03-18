@@ -1,6 +1,7 @@
 from typing import Iterable, Any, TypeVar, Generic, Self
 
-from mem.algo.max_entropy_fast import MaxEnt
+from mem.algo.max_entropy_fast import MaxEntFast
+from mem.algo.max_entropy_slow import MaxEntropySlow
 
 T = TypeVar("T")
 
@@ -11,11 +12,12 @@ class SequenceGenerator(Generic[T]):
     vocabulary_size: int
     element_to_index: dict[T, int]
     index_to_element: dict[int, T]
-    max_entropy: MaxEnt
+    max_entropy: MaxEntFast | | MaxEntropySlow
     k_max: int
 
     def __init__(
-        self, training_sequence: Iterable[T], /, *, k_max: int = 10, max_iter: int = 100
+            self, training_sequence: Iterable[T], /, *, k_max: int = 10, max_iter: int =
+            100, fast: bool = True
     ):
         self.training_sequence = tuple(training_sequence)
         _unique_elements = list(set(self.training_sequence))
@@ -25,7 +27,7 @@ class SequenceGenerator(Generic[T]):
         self.index_sequence = self.elements_to_indices(self.training_sequence)
         self.k_max = k_max
         self.max_iter = max_iter
-        self.max_entropy = MaxEnt(
+        self.max_entropy = (MaxEntFast if fast else MaxEntropySlow)(
             self.index_sequence, q=self.vocabulary_size, kmax=self.k_max
         )
 

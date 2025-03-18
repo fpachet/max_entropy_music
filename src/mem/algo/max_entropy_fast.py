@@ -13,10 +13,10 @@ import numpy.typing as npt
 import tqdm
 from scipy.optimize import minimize
 
-from . import NDArrayInt, NDArrayFloat, FloatType, IdxType
+from mem.algo import NDArrayInt, NDArrayFloat, FloatType, IdxType
 
 
-class MaxEnt:
+class MaxEntFast:
     """
     A class to represent a Maximum Entropy model.
 
@@ -130,7 +130,7 @@ class MaxEnt:
         self.C = compute_contexts(
             index_training_seq,
             kmax=self.K,
-            padding=MaxEnt.PADDING,
+            padding=MaxEntFast.PADDING,
         )
 
         self.L_ix_arr = compute_context_indices(self.C, self.K)
@@ -195,7 +195,7 @@ class MaxEnt:
         )
 
     @staticmethod
-    def load_checkpoint(path: str) -> MaxEnt:
+    def load_checkpoint(path: str) -> MaxEntFast:
         raise NotImplemented("Not implemented yet")
 
     # @Timeit
@@ -244,7 +244,6 @@ class MaxEnt:
         print("loss={loss}".format(loss=loss))
         return loss
 
-    # @Timeit
     def _grad_loc_field(self, _j_j7):
         """
         Formula (7) in the referenced paper.
@@ -256,7 +255,6 @@ class MaxEnt:
         h_plus_sum_potentials = self.h[:, None] + sum_potentials
         return -(self.K7 - np.exp(h_plus_sum_potentials) / self.Z).sum(axis=1) / self.M
 
-    # @Timeit
     def sum_kronecker_1(self, k):
         row_r = np.hstack(
             [
@@ -267,7 +265,6 @@ class MaxEnt:
         row_r2 = self.K7[:]
         return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
 
-    # @Timeit
     def sum_kronecker_2(self, k):
         row_r = self.K7[:]
         row_r2 = np.hstack(
@@ -278,7 +275,6 @@ class MaxEnt:
         )
         return -np.count_nonzero(row_r.reshape(self.q, 1, self.M) * row_r2, axis=2)
 
-    # @Timeit
     def exp1(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
@@ -298,7 +294,6 @@ class MaxEnt:
         )
         return res
 
-    # @Timeit
     def exp2(self, _j_j7):
         kronecker = np.zeros((self.K, self.q, self.M), dtype=bool)
         for k in range(self.K):
@@ -318,11 +313,9 @@ class MaxEnt:
         )
         return np.swapaxes(res, 1, 2)
 
-    # @Timeit
     def regularization(self):
         return self.l * np.abs(self.J[:, : self.q, : self.q])
 
-    # @Timeit
     def _grad_inter_pot(self, _j_j7):
         """
         Formula (8) in the referenced paper.
@@ -340,16 +333,13 @@ class MaxEnt:
 
         return dg_dj / self.M
 
-    # @Timeit
     def update_arrays_from_params(self, params: NDArrayFloat):
         self.h = params[: self.q]
         self.J[:, : self.q, : self.q] = params[self.q :].reshape(self.K, self.q, self.q)
 
-    # @Timeit
     def arrays_to_params(self):
         return np.concatenate([self.h, self.J[:, : self.q, : self.q].reshape(-1)])
 
-    # @Timeit
     def nll_and_grad(self, params):
         self.update_arrays_from_params(params)
         self.compute_z()
@@ -363,8 +353,7 @@ class MaxEnt:
         # self.save_checkpoint(f"./model-checkpoint-{self.checkpoint_index}")
         self.checkpoint_index += 1
 
-    # @Timeit
-    def train(self, max_iter=1000):
+    def train(self, max_iter=1000) -> Self:
         self.checkpoint_index = 0
         params_init = np.zeros(self.q + self.K * self.q * self.q)
         res = minimize(
@@ -378,6 +367,7 @@ class MaxEnt:
         )
         self.h = res.x[: self.q]
         self.J[:, : self.q, : self.q] = res.x[self.q :].reshape(self.K, self.q, self.q)
+        return self
 
     def sum_energy_in_context(
         self, seq: NDArrayInt, ix: int, center: int | None = None
@@ -388,39 +378,13 @@ class MaxEnt:
             energy += self.J[k, center, seq[ix + (k + 1)]]
         return energy
 
-    def sample_index_seq_fp(self, length=20, burn_in=1000) -> npt.NDArray:
-        # index_seq = np.random.randint(0, self.q, size=length + 2 * self.K)
-        index_seq = np.zeros(length + 2 * self.K, dtype=IdxType)
-        index_seq[: self.K] = MaxEnt.PADDING
-        index_seq[-self.K :] = MaxEnt.PADDING
-
-        random_gen = np.random.RandomState(seed=1)
-        for _ in range(burn_in):
-            pos_in_seq = self.K + random_gen.randint(0, length)
-            center = index_seq[pos_in_seq]
-            current_energy = self.h[center] + self.sum_energy_in_context(
-                index_seq, pos_in_seq, int(center)
-            )
-
-            new_center = np.random.randint(0, self.q - 1)
-            if new_center >= center:
-                new_center += 1
-
-            new_energy = self.h[new_center] + self.sum_energy_in_context(
-                index_seq, pos_in_seq, new_center
-            )
-            acceptance_ratio = min(1, np.exp(new_energy - current_energy))
-            if random_gen.random() < acceptance_ratio:
-                index_seq[pos_in_seq] = new_center
-        return index_seq[self.K : -self.K]
-
     def sample_index_seq(
         self, length: int = 20, /, *, burn_in: int = 1000
     ) -> NDArrayInt:
         # generate sequence of note indexes
         index_seq = np.zeros(length + 2 * self.K, dtype=IdxType)
-        index_seq[: self.K] = MaxEnt.PADDING
-        index_seq[-self.K :] = MaxEnt.PADDING
+        index_seq[: self.K] = MaxEntFast.PADDING
+        index_seq[-self.K :] = MaxEntFast.PADDING
         for _ in tqdm.tqdm(range(burn_in)):
             pos_in_seq = self.K + np.random.randint(0, length)
             energies = np.zeros(self.q)

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from mem.training.training import SequenceGenerator
+from mem.training.generator import SequenceGenerator
 
 if __name__ == "__main__":
     s = Path("combray-extract.txt").read_text()
