@@ -2,17 +2,22 @@
 
 A melody generation system implementing a Maximum Entropy approach with the Ising/Potts model.
 It is based on the paper:
-Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melodic styles. Sci Rep 7, 9172 (2017). https://doi.org/10.1038/s41598-017-08028-4
+Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melodic styles. Sci Rep 7, 9172 (2017). https://doi.org/10. 
+1038/s41598-017-08028-4 which is available [here](https://www.nature.com/articles/s41598-017-08028-4).
 
-which is available at: https://www.nature.com/articles/s41598-017-08028-4
-
-It captures longer range interactions than Markov models (up to K) without the need for exponential amount of training data.
-Number of parameters is (vocabulary_size + K * vocabulary_size^2), with K typically about 10.
+This model captures longer range interactions than Markov models (up to $K$) without the need for exponential amount of training data.
+Number of parameters is $q + Kq^2$ where $q$ is the vocabulary size and $K$ is typically about 10.
 
 ## Authors
 - [François Pachet](https://github.com/fpachet)
 - [Pierre Roy](https://github.com/roypie)
  
+## Implementation
+
+There are two implementations of the model: a slow one, using Python loops, and a fast one, using Numpy. The slow version is useful to understand the model and the approach. The fast version is about 100 times faster and is useful for training and generating melodies.
+
+The Numpy implementation references equations as they are numbered in [this paper](
+https://static-content.springer.com/esm/art%3A10.1038%2Fs41598-017-08028-4/MediaObjects/41598_2017_8028_MOESM49_ESM.pdf).
 ## Features
 
 - Both a pedagogical and an efficient implementation of a Maximum Entropy model for melody generation.
@@ -45,6 +50,8 @@ mido~=1.3.3
 ## Usage
 
 ```python
+import mem.midi.midi
+import mem.training
 from mem.algo import MaxEntropyModel
 from utils.midi_processor import MIDIProcessor
 
@@ -62,7 +69,7 @@ model.train(training_data)
 new_melody = model.generate(length=32)
 
 # Save the generated melody
-processor.save_midi(new_melody, 'output.midi')
+mem.training.midi_io.save_midi(new_melody, 'output.midi')
 ```
 
 ## Contributing
