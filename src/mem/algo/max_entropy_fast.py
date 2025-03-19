@@ -6,17 +6,29 @@ speedup to the price of more complex code.
 
 from __future__ import annotations
 
-from typing import Sized
+import logging
+from pathlib import Path
+from typing import Collection, Self
 
 import numpy as np
 import numpy.typing as npt
-import tqdm
+from tqdm import trange
+from tqdm.contrib.logging import logging_redirect_tqdm
 from scipy.optimize import minimize
 
 from mem.algo import NDArrayInt, NDArrayFloat, FloatType, IdxType
 
+logger = logging.getLogger(__name__)
+logFormatter = logging.Formatter(
+    fmt="%(levelname)-8s — Max Entropy (Fast) — %(message)s"
+)
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
+logger.propagate = False
 
-class MaxEntFast:
+
+class MaxEntropyFast:
     """
     A class to represent a Maximum Entropy model.
 
@@ -41,16 +53,8 @@ class MaxEntFast:
 
         h: np.ndarray — 1D-numpy array of shape (q), h[σ] is the bias of symbol σ.
 
-        C: NDArrayInt — 2D-numpy array of shape (M, 2•kmax + 1), contexts[µ] is
-            the context centered around the symbol at position µ.
-
         Z: npt.NDArray[float] — 1D-numpy array of shape (M), Z[µ] is the partition
             function for the context centered around the symbol at position µ.
-
-        partition_ix: NDArrayInt — 4D-numpy array of shape (M, q, 3, 2•kmax),
-            partition_ix[µ, σ] is the indices of the interaction potentials of the
-            context centered around symbol index S[µ] with the center replaced by
-            symbol index σ.
 
         J5: tuple[NDArrayInt, ...] — a tuple of 1D-numpy arrays of shape (M•2•kmax),
             J5 is created by reshaping context indices into a tuple of 3 1D-arrays;
@@ -85,96 +89,138 @@ class MaxEntFast:
 
     PADDING = -1
 
-    S: list[int]
+    S: NDArrayInt
     M: int
     q: int
     K: int
-    J: npt.NDArray[FloatType]
-    h: np.ndarray
-    C: NDArrayInt
-    Z: npt.NDArray[FloatType]
 
-    partition_ix: NDArrayInt
+    J: NDArrayFloat
+    h: NDArrayFloat
+    Z: NDArrayFloat
+
+    l: float
+
+    checkpoint_index: int
+
     J5: tuple[NDArrayInt, ...]
     J6: tuple[NDArrayInt, ...]
     J7: tuple[NDArrayInt, ...]
 
     K7: npt.NDArray[bool]
 
-    l: float
-
-    checkpoint_index: int
-
     def __init__(
         self,
-        index_training_seq: Sized[int],
+        idx_seq: Collection[int],
+        m: int,
+        q: int,
+        k: int,
+        j: NDArrayFloat,
+        h: NDArrayFloat,
+        z: NDArrayFloat,
+        j5: tuple[NDArrayInt, ...],
+        j6: tuple[NDArrayInt, ...],
+        j7: tuple[NDArrayInt, ...],
+        k7: npt.NDArray[np.bool_],
+        l: float,
+        checkpoint_index: int,
+    ):
+        self.S = np.array(idx_seq, dtype=IdxType)
+        self.M = m
+        self.q = q
+        self.K = k
+        self.J = j
+        self.h = h
+        self.Z = z
+        self.J5 = j5
+        self.J6 = j6
+        self.J7 = j7
+        self.K7 = k7
+        self.l = l
+        self.checkpoint_index = checkpoint_index
+
+    @classmethod
+    def on_sequence(
+        cls,
+        index_training_seq: Collection[int],
         *,
         q: int,
-        kmax,
+        k_max,
         l=1.0,
     ):
-        self.S: NDArrayInt = np.array(index_training_seq, dtype=IdxType)
-        self.M: int = len(self.S)
-        self.q: int = q
-        self.K: int = kmax
-        self.l = l
-
-        self.Z = np.zeros(self.M, dtype=FloatType)
-
-        self.h = np.zeros(self.q, dtype=FloatType)
+        s: NDArrayInt = np.array(index_training_seq, dtype=IdxType)
+        s.flags.writeable = False
+        m: int = len(s)
+        q: int = q
+        k: int = k_max
+        l = l
+        z = np.zeros(m, dtype=FloatType)
+        h = np.zeros(q, dtype=FloatType)
 
         # init J with j_init and an additional row of zeros at the end and an
         # additional column of zeros at the end of each row
-        self.J = np.zeros((self.K, self.q + 1, self.q + 1), dtype=FloatType)
+        j = np.zeros((k, q + 1, q + 1), dtype=FloatType)
 
-        self.C = compute_contexts(
+        c = compute_contexts(
             index_training_seq,
-            kmax=self.K,
-            padding=MaxEntFast.PADDING,
+            kmax=k,
+            padding=MaxEntropyFast.PADDING,
         )
+        c.flags.writeable = False
 
-        self.L_ix_arr = compute_context_indices(self.C, self.K)
-        _indices = compute_context_indices(self.C, self.K)
+        _indices = compute_context_indices(c, k)
         _indices = np.swapaxes(_indices, 0, 1)
         _indices = np.reshape(_indices, (3, -1))
-        self.J5 = tuple(_indices)
+        j5 = tuple(_indices)
+        j5[0].flags.writeable = False
+        j5[1].flags.writeable = False
+        j5[2].flags.writeable = False
 
-        self.partition_ix = compute_partition_context_indices(
-            self.C, q=self.q, kmax=self.K
+        partition_ix = compute_partition_context_indices(
+            c, q=q, kmax=k
         )  # shape is (M, q, 3, 2•K)
-        _indices = np.swapaxes(self.partition_ix, 1, 2)  # (M, 3, q, 2•K)
-        _indices = np.reshape(_indices, (self.M, 3, -1))  # (M, 3, 2•K•q)
+
+        _indices = np.swapaxes(partition_ix, 1, 2)  # (M, 3, q, 2•K)
+        _indices = np.reshape(_indices, (m, 3, -1))  # (M, 3, 2•K•q)
         _indices = np.swapaxes(_indices, 0, 1)  # (3, M, 2•K•q)
         _indices = np.reshape(_indices, (3, -1))  # (3, M•2•K•q)
-        self.J6 = tuple(_indices)
+        j6 = tuple(_indices)
+        j6[0].flags.writeable = False
+        j6[1].flags.writeable = False
+        j6[2].flags.writeable = False
 
-        _indices = np.swapaxes(self.partition_ix, 0, 1)  # (q, M, 3, 2•K)
+        _indices = np.swapaxes(partition_ix, 0, 1)  # (q, M, 3, 2•K)
         _indices = np.swapaxes(_indices, 1, 2)  # (q, 3, M, 2•K)
         _indices = np.swapaxes(_indices, 0, 1)  # (3, q, M, 2•K)
         _indices = np.reshape(_indices, (3, -1))  # (3, q•M•2•K)
-        self.J7 = tuple(_indices)
+        j7 = tuple(_indices)
+        j7[0].flags.writeable = False
+        j7[1].flags.writeable = False
+        j7[2].flags.writeable = False
 
-        self.K7 = np.equal(np.arange(self.q)[:, None], self.S[None, :])
+        k7 = np.equal(np.arange(q)[:, None], s[None, :])
+        k7.flags.writeable = False
 
-        # get the partition context indices and converts the 4D-array of shape
-        # (M, q, 3, 2•kmax) into a list of length M, each element is a list of length q
-        # whose elements are tuple of three 2•kmax numpy vectors This is to make
-        # J[self.partition_context_indices[mu, sigma]] return the result using numpy
-        # matrix indexing
-        _partition_context_indices = compute_partition_context_indices(
-            self.C, q=self.q, kmax=self.K
+        checkpoint_index = 0
+
+        return cls(
+            s,
+            m,
+            q,
+            k,
+            j,
+            h,
+            z,
+            j5,
+            j6,
+            j7,
+            k7,
+            l,
+            checkpoint_index,
         )
-        self.partition_context_indices = []
-        for row_mu in _partition_context_indices:
-            matrix_mu_sigma = []
-            for col_sigma in row_mu:
-                matrix_mu_sigma.append(tuple(col_sigma))
-            self.partition_context_indices.append(matrix_mu_sigma)
 
-        self.checkpoint_index = 0
-
-    def save_checkpoint(self, path: str):
-        np.savez(
+    def save_model(self, path: str | Path):
+        logger.info("Saving model to %s", path)
+        np.savez_compressed(
             path,
             S=self.S,
             M=self.M,
@@ -182,23 +228,35 @@ class MaxEntFast:
             K=self.K,
             J=self.J,
             h=self.h,
-            C=self.C,
             Z=self.Z,
-            partition_ix=self.partition_ix,
             J5=self.J5,
             J6=self.J6,
             J7=self.J7,
             K7=self.K7,
             l=self.l,
-            partition_context_indices=self.partition_context_indices,
             checkpoint_index=self.checkpoint_index,
         )
 
-    @staticmethod
-    def load_checkpoint(path: str) -> MaxEntFast:
-        raise NotImplemented("Not implemented yet")
+    @classmethod
+    def load_model(cls, path: str | Path):
+        logger.info("Loading model from %s", path)
+        model = np.load(path)
+        return cls(
+            model["S"],
+            model["M"],
+            model["q"],
+            model["K"],
+            model["J"],
+            model["h"],
+            model["Z"],
+            model["J5"],
+            model["J6"],
+            model["J7"],
+            model["K7"],
+            model["l"],
+            model["checkpoint_index"],
+        )
 
-    # @Timeit
     def compute_z(self):
         """
         Compute the partition function Z for each context µ in the training sequence.
@@ -208,6 +266,7 @@ class MaxEntFast:
 
         Formula (6) in the referenced paper.
         """
+        logger.debug("Compute the normalization matrix Z")
 
         # all_j is essentially J[self.Z_ix] for all mu < self.M and all sigma < self.q
         # first, all_j is a 1D-array of shape (M * q * 2•kmax)
@@ -241,7 +300,7 @@ class MaxEntFast:
         norm1_j = np.sum(np.abs(self.J))
 
         loss = (-(sum_h + sum_j - log_z) + self.l * norm1_j) / self.M
-        print("loss={loss}".format(loss=loss))
+        logger.info(f"Loss = {loss:.6f}")
         return loss
 
     def _grad_loc_field(self, _j_j7):
@@ -354,6 +413,7 @@ class MaxEntFast:
         self.checkpoint_index += 1
 
     def train(self, max_iter=1000) -> Self:
+        logger.info("Training for %d iterations", max_iter)
         self.checkpoint_index = 0
         params_init = np.zeros(self.q + self.K * self.q * self.q)
         res = minimize(
@@ -381,11 +441,13 @@ class MaxEntFast:
     def sample_index_seq(
         self, length: int = 20, /, *, burn_in: int = 1000
     ) -> NDArrayInt:
+        logger.info("Sampling a sequence of %d elements", length)
         # generate sequence of note indexes
         index_seq = np.zeros(length + 2 * self.K, dtype=IdxType)
-        index_seq[: self.K] = MaxEntFast.PADDING
-        index_seq[-self.K :] = MaxEntFast.PADDING
-        for _ in tqdm.tqdm(range(burn_in)):
+        index_seq[: self.K] = MaxEntropyFast.PADDING
+        index_seq[-self.K :] = MaxEntropyFast.PADDING
+        use_tqdm = logger.isEnabledFor(logging.INFO)
+        for _ in (trange if use_tqdm else range)(burn_in):
             pos_in_seq = self.K + np.random.randint(0, length)
             energies = np.zeros(self.q)
             for new_center in range(self.q):
@@ -396,7 +458,7 @@ class MaxEntFast:
             energies = energies / energies.sum()
             proposed_note = np.random.choice(range(self.q), p=energies)
             index_seq[pos_in_seq] = proposed_note
-        for _ in range(10):
+        for _ in range(1):
             self.smooth_sequence(index_seq)
         return index_seq[self.K : -self.K]
 
@@ -413,7 +475,9 @@ class MaxEntFast:
         return seq
 
 
-def compute_contexts(idx_seq: Sized[int], /, *, kmax: int, padding=-1) -> NDArrayInt:
+def compute_contexts(
+    idx_seq: Collection[int], /, *, kmax: int, padding=-1
+) -> NDArrayInt:
     """
     Compute all contexts for a given index sequence.
 

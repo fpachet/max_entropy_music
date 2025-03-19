@@ -13,9 +13,7 @@ from pathlib import Path
 from mem.training.generator import SequenceGenerator
 
 if __name__ == "__main__":
-    midi_pitches = extract_pitches_from_midi(
-        Path("../data/midi/bach_partita_violin.mid")
-    )
+    midi_pitches = extract_pitches_from_midi(Path("data/midi/bach_partita_violin.mid"))
     g = SequenceGenerator(midi_pitches, k_max=10, max_iter=100).train()
     for i in range(10):
-        save_midi(g.sample_seq(100), Path(f"./output-{i}.mid"))
+        save_midi(g.sample_seq(100), Path(f"generated/bach-partita-{i}.mid"))
