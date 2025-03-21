@@ -9,6 +9,14 @@ from mem.midi.midi import save_midi, extract_pitches_from_midi
 from mem.algo import NDArrayFloat, NDArrayInt
 
 """
+Copyright (c) 2025 Ynosound.
+All rights reserved.
+
+Unauthorized copying, modification, or distribution of this software, in whole or in part, 
+is strictly prohibited without prior written consent from MyCompany.
+
+See LICENSE file in the project root for full license information.
+
 A working version of the Max Entropy paper.
 Implementation follows the paper closely.
 Contexts are created only once, partition functions computed only when necessary
@@ -219,7 +227,9 @@ if __name__ == "__main__":
     # generator = MaxEntropyMelodyGenerator("../../../data/bach_partita_mono.midi", Kmax=10)
     # generator = MaxEntropyMelodyGenerator("../../../data/partita_violin.mid", Kmax=10)
     # generator = MaxEntropyMelodyGenerator("../../../data/prelude_c.mid", Kmax=10)
-    generator = MaxEntropySlow("../../../data/midi/bach_jesus_joy.mid", k_max=10)
+    generator = MaxEntropySlow(
+        "../../../examples/data/midi/bach_partita_violin.mid", k_max=10
+    )
     # generator = MaxEntropyMelodyGenerator("../../../data//Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
     # [generator, h_opt, J_opt] = pickle.load(open("../../../data/partita_violin.p", "rb"))
     generator.train(max_iter=100)

@@ -1,4 +1,12 @@
 """
+Copyright (c) 2025 Ynosound.
+All rights reserved.
+
+Unauthorized copying, modification, or distribution of this software, in whole or in part,
+is strictly prohibited without prior written consent from MyCompany.
+
+See LICENSE file in the project root for full license information.
+
 Implementation of paper (see README.md), using numpy arrays whenever possible to
 avoid Python loops. Compared to the slow implementation, this provides a significant
 speedup to the price of more complex code.
@@ -12,9 +20,8 @@ from typing import Collection, Self
 
 import numpy as np
 import numpy.typing as npt
-from tqdm import trange
-from tqdm.contrib.logging import logging_redirect_tqdm
 from scipy.optimize import minimize
+from tqdm import trange
 
 from mem.algo import NDArrayInt, NDArrayFloat, FloatType, IdxType
 
