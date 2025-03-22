@@ -415,6 +415,7 @@ class MaxEntropyFast:
 
     def training_callback(self, params):
         # self.save_checkpoint(f"./model-checkpoint-{self.checkpoint_index}")
+        logger.info("Training iteration %d", self.checkpoint_index)
         self.checkpoint_index += 1
 
     def train(self, max_iter=1000) -> Self:
