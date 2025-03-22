@@ -16,11 +16,18 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
+# Change the value of MODE to "train" to train the model or "load" to load the model.
+MODE = "train"  # "load"
+
 if __name__ == "__main__":
     name = "Bach Partita for Violin"
     midi_pitches = extract_pitches_from_midi(Path("data/midi/bach_partita_violin.mid"))
     g = SequenceGenerator(midi_pitches, k_max=10)
-    # g.train(max_iter=10)
-    # g.save_model(f"./models/model-{name}.npz")
-    g.load_model(f"./models/model-{name}.npz")
+
+    if MODE == "train":
+        g.train(max_iter=10)
+        g.save_model(f"./models/model-{name}.npz")
+    elif MODE == "load":
+        g.load_model(f"./models/model-{name}.npz")
+
     save_midi(g.sample_seq(200), f"./generated/{name}.mid")
