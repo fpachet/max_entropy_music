@@ -16,6 +16,6 @@ logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
     midi_pitches = extract_pitches_from_midi(Path("data/midi/bach_partita_violin.mid"))
-    g = SequenceGenerator(midi_pitches, k_max=1, fast=False).train(max_iter=10)
+    g = SequenceGenerator(midi_pitches, k_max=1, fast=True).train(max_iter=10)
     for i in range(10):
         save_midi(g.sample_seq(100), Path(f"generated/bach-partita-{i}.mid"))
