@@ -8,7 +8,7 @@ is strictly prohibited without prior written consent from MyCompany.
 See LICENSE file in the project root for full license information.
 """
 
-from typing import Iterable, Any, TypeVar, Generic, Self
+from typing import Iterable, Any, TypeVar, Generic, Self, Collection
 from pathlib import Path
 from mem.algo.max_entropy_fast import MaxEntropyFast
 from mem.algo.max_entropy_slow import MaxEntropySlow
@@ -25,25 +25,13 @@ class SequenceGenerator(Generic[T]):
     __max_entropy: MaxEntropyFast | MaxEntropySlow
 
     def __init__(
-        self,
-        training_sequence: Iterable[T],
-        index_sequence: Iterable[int],
-        vocabulary_size: int,
-        element_to_index: dict[T, int],
-        index_to_element: dict[int, T],
-        max_entropy: MaxEntropyFast | MaxEntropySlow,
+        self, training_sequence: Collection[T], /, *, k_max: int = 10, fast: bool = True
     ):
-        self.training_sequence = tuple(training_sequence)
-        self.__index_sequence = tuple(index_sequence)
-        self.vocabulary_size = vocabulary_size
-        self.element_to_index = dict(element_to_index)
-        self.index_to_element = dict(index_to_element)
-        self.__max_entropy = max_entropy
-
-    @classmethod
-    def on_sequence(
-        cls, training_sequence: Iterable[T], /, *, k_max: int = 10, fast: bool = True
-    ):
+        if k_max > len(training_sequence):
+            raise ValueError(
+                f"k_max {k_max} must be less than the length of the training "
+                "sequence {len(training_sequence)}"
+            )
         training_sequence = tuple(training_sequence)
         _unique_elements = list(set(training_sequence))
         vocabulary_size = len(_unique_elements)
@@ -53,28 +41,24 @@ class SequenceGenerator(Generic[T]):
         max_entropy = (MaxEntropyFast if fast else MaxEntropySlow).on_sequence(
             index_sequence, q=vocabulary_size, k_max=k_max
         )
-        return cls(
-            training_sequence,
-            index_sequence,
-            vocabulary_size,
-            element_to_index,
-            index_to_element,
-            max_entropy,
-        )
+        self.training_sequence = tuple(training_sequence)
+        self.__index_sequence = tuple(index_sequence)
+        self.vocabulary_size = vocabulary_size
+        self.element_to_index = dict(element_to_index)
+        self.index_to_element = dict(index_to_element)
+        self.__max_entropy = max_entropy
 
     @classmethod
     def train_on_sequence(
         cls,
-        training_sequence: Iterable[T],
+        training_sequence: Collection[T],
         /,
         *,
         k_max: int = 10,
         max_iter: int = 100,
         fast: bool = True,
     ):
-        return cls.on_sequence(training_sequence, k_max=k_max, fast=fast).train(
-            max_iter=max_iter
-        )
+        return cls(training_sequence, k_max=k_max, fast=fast).train(max_iter=max_iter)
 
     def set_model(self, max_entropy_model: MaxEntropyFast | MaxEntropySlow) -> None:
         self.__max_entropy = max_entropy_model

@@ -1,0 +1,19 @@
+[project]
+name = "max_entropy_project"
+version = "0.1.0"
+description = "A project implementing the Max Entropy algorithm."
+authors = [
+    {name = "François Pachet", email = "pachet@ynosound.com"},
+    {name = "Pierre Roy", email = "pierre@ynosound.com"}
+]
+license = {file = "LICENSE"}
+
+[project.dependencies]
+python = ">=3.8"
+numpy = "^1.21.0"
+scipy = "^1.7.0"
+tqdm = "^4.61.0"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

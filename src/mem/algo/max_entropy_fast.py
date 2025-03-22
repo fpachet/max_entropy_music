@@ -273,8 +273,6 @@ class MaxEntropyFast:
 
         Formula (6) in the referenced paper.
         """
-        logger.debug("Compute the normalization matrix Z")
-
         # all_j is essentially J[self.Z_ix] for all mu < self.M and all sigma < self.q
         # first, all_j is a 1D-array of shape (M * q * 2•kmax)
         all_j = self.J[self.J6]
@@ -346,8 +344,8 @@ class MaxEntropyFast:
         for k in range(self.K):
             kronecker[k] = np.hstack(
                 [
-                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
-                    self.K7[:, : self.M - (k + 1)],
+                    (np.full((self.q, k + 1), fill_value=False, dtype=bool)),
+                    (self.K7[:, : self.M - (k + 1)]),
                 ]
             )
         sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)

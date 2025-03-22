@@ -14,12 +14,13 @@ from mem.training.generator import SequenceGenerator
 
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 if __name__ == "__main__":
+    name = "Bach Partita for Violin"
     midi_pitches = extract_pitches_from_midi(Path("data/midi/bach_partita_violin.mid"))
-    g = SequenceGenerator.on_sequence(midi_pitches, k_max=2)
-    g.train(max_iter=10)
-    g.save_model("./model.npz")
-    # g.load_model("./model.npz")
-    save_midi(g.sample_seq(200), "./partita.mid")
+    g = SequenceGenerator(midi_pitches, k_max=10)
+    # g.train(max_iter=10)
+    # g.save_model(f"./models/model-{name}.npz")
+    g.load_model(f"./models/model-{name}.npz")
+    save_midi(g.sample_seq(200), f"./generated/{name}.mid")
