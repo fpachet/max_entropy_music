@@ -26,7 +26,11 @@ def save_midi(
     for midi_pitch in midi_pitch_sequence:
         track.append(mido.Message("note_on", note=midi_pitch, velocity=64, time=0))
         track.append(mido.Message("note_off", note=midi_pitch, velocity=64, time=120))
-    mid.save(Path(output_file))
+    path = Path(output_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    while path.exists():
+        path = path.with_name(f"{path.stem}-1{path.suffix}")
+    mid.save(path)
 
 
 def extract_pitches_from_midi(midi_file: Path | str) -> tuple[int, ...]:

@@ -64,6 +64,10 @@ class SequenceGenerator(Generic[T]):
         self.__max_entropy = max_entropy_model
 
     def save_model(self, file_path: str | Path):
+        file_path = Path(file_path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        while file_path.exists():
+            file_path = file_path.with_name(f"{file_path.stem}-1{file_path.suffix}")
         self.__max_entropy.save_model(file_path)
 
     def load_model(self, file_path: str | Path) -> None:
