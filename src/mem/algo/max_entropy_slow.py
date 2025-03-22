@@ -1,20 +1,38 @@
+import logging
 import random
 from typing import Self, Collection
 
 import numpy as np
 import numpy.typing as npt
 from scipy.optimize import minimize
+from tqdm import trange
 
-from mem.midi.midi import save_midi, extract_pitches_from_midi
-from mem.algo import NDArrayFloat, NDArrayInt
+from mem.algo import NDArrayFloat, NDArrayInt, IdxType
 
 """
+Copyright (c) 2025 Ynosound.
+All rights reserved.
+
+Unauthorized copying, modification, or distribution of this software, in whole or in part, 
+is strictly prohibited without prior written consent from MyCompany.
+
+See LICENSE file in the project root for full license information.
+
 A working version of the Max Entropy paper.
 Implementation follows the paper closely.
 Contexts are created only once, partition functions computed only when necessary
 negative_log_likelihood and gradient computed together (option jac=True in scipy.minimize),
 to reduce the number of computations needed
 """
+
+logger = logging.getLogger(__name__)
+logFormatter = logging.Formatter(
+    fmt="%(levelname)-8s — Max Entropy (Fast) — %(message)s"
+)
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+logger.addHandler(consoleHandler)
+logger.propagate = False
 
 
 class MaxEntropySlow:
@@ -36,6 +54,8 @@ class MaxEntropySlow:
     def __init__(
         self,
         index_training_seq: Collection[int],
+        /,
+        *,
         q: int,
         k_max=10,
         l=1.0,
@@ -46,7 +66,7 @@ class MaxEntropySlow:
         self.all_contexts = np.empty(len(self.S), dtype=object)
         for mu in range(len(self.S)):
             self.all_contexts[mu] = self.build_context(self.S, mu)
-        self.all_partitions = np.zeros(len(self.S))
+        self.all_partitions = np.zeros(len(self.S), dtype=IdxType)
         self.l = l
 
     @classmethod
@@ -58,7 +78,7 @@ class MaxEntropySlow:
         k_max,
         l=1.0,
     ):
-        pass
+        return cls(index_training_seq, q=q, k_max=k_max, l=l)
 
     def sum_energy_in_context(self, context, center):
         # center is not necessarily the center of context
@@ -98,15 +118,18 @@ class MaxEntropySlow:
             for k in range(self.K)
         }
         # compute all partition functions for all mu to be used by obj function and gradient
-        self.all_partitions = np.zeros(len(self.S))
+        self.all_partitions = np.zeros(len(self.S), dtype=IdxType)
         self.compute_all_z()
         return self.negative_log_likelihood(), self.gradient()
 
     def compute_all_z(self):
-        self.all_partitions = [
-            self.compute_partition_function(self.all_contexts[mu])
-            for mu in range(len(self.S))
-        ]
+        self.all_partitions = np.array(
+            [
+                self.compute_partition_function(self.all_contexts[mu])
+                for mu in range(len(self.S))
+            ],
+            dtype=IdxType,
+        )
 
     def negative_log_likelihood(self):
         loss = 0
@@ -120,6 +143,7 @@ class MaxEntropySlow:
         loss *= -1 / M
         l1_reg = sum(np.abs(self.J[k]).sum() for k in range(self.K))
         loss += (self.l / M) * l1_reg
+        logger.info(f"Loss = {loss:.6f}")
         return loss
 
     def gradient(self):
@@ -189,9 +213,11 @@ class MaxEntropySlow:
         return self
 
     def sample_index_seq(self, length=20, burn_in=1000):
+        logger.info("Sampling a sequence of %d elements", length)
         # generate sequence of indices
         sequence = [random.choice(self.S) for _ in range(length)]
-        for _ in range(burn_in):
+        use_tqdm = logger.isEnabledFor(logging.INFO)
+        for _ in (trange if use_tqdm else range)(burn_in):
             idx = random.randint(0, length - 1)
             context = self.build_context(sequence, idx)
             energies = np.zeros(self.q)
@@ -212,17 +238,3 @@ class MaxEntropySlow:
             best_note = np.where(energies == max(energies))[0][0]
             sequence[idx] = best_note
         return sequence
-
-
-if __name__ == "__main__":
-    # Utilisation
-    # generator = MaxEntropyMelodyGenerator("../../../data/bach_partita_mono.midi", Kmax=10)
-    # generator = MaxEntropyMelodyGenerator("../../../data/partita_violin.mid", Kmax=10)
-    # generator = MaxEntropyMelodyGenerator("../../../data/prelude_c.mid", Kmax=10)
-    generator = MaxEntropySlow("../../../data/midi/bach_jesus_joy.mid", k_max=10)
-    # generator = MaxEntropyMelodyGenerator("../../../data//Just_Friends-_Pat_Martino_Solo.mid", Kmax=10)
-    # [generator, h_opt, J_opt] = pickle.load(open("../../../data/partita_violin.p", "rb"))
-    generator.train(max_iter=100)
-    # pickle.dump([generator, h_opt, J_opt], open("../../../data/partita_violin.p", "wb"))
-    generated_sequence = generator.sample_index_seq(burn_in=4000, length=300)
-    save_midi(generated_sequence, "../../../examples/data/maxent-generated_melody.mid")

@@ -36,9 +36,9 @@ if __name__ == "__main__":
     content = content.replace("\n", ";")
     chord_labels = [label.strip() for label in content.split(";")]
     g = (
-        SequenceGenerator(chord_labels[:10000], k_max=5, max_iter=100, fast=True)
+        SequenceGenerator(chord_labels[:10000], k_max=5, fast=True)
         .print_info()
-        .train()
+        .train(max_iter=100)
     )
     for i in range(10):
         print(g.sample_seq(10))

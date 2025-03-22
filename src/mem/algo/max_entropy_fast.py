@@ -1,4 +1,12 @@
 """
+Copyright (c) 2025 Ynosound.
+All rights reserved.
+
+Unauthorized copying, modification, or distribution of this software, in whole or in part,
+is strictly prohibited without prior written consent from MyCompany.
+
+See LICENSE file in the project root for full license information.
+
 Implementation of paper (see README.md), using numpy arrays whenever possible to
 avoid Python loops. Compared to the slow implementation, this provides a significant
 speedup to the price of more complex code.
@@ -12,9 +20,8 @@ from typing import Collection, Self
 
 import numpy as np
 import numpy.typing as npt
-from tqdm import trange
-from tqdm.contrib.logging import logging_redirect_tqdm
 from scipy.optimize import minimize
+from tqdm import trange
 
 from mem.algo import NDArrayInt, NDArrayFloat, FloatType, IdxType
 
@@ -266,8 +273,6 @@ class MaxEntropyFast:
 
         Formula (6) in the referenced paper.
         """
-        logger.debug("Compute the normalization matrix Z")
-
         # all_j is essentially J[self.Z_ix] for all mu < self.M and all sigma < self.q
         # first, all_j is a 1D-array of shape (M * q * 2•kmax)
         all_j = self.J[self.J6]
@@ -339,8 +344,8 @@ class MaxEntropyFast:
         for k in range(self.K):
             kronecker[k] = np.hstack(
                 [
-                    np.full((self.q, k + 1), fill_value=False, dtype=bool),
-                    self.K7[:, : self.M - (k + 1)],
+                    (np.full((self.q, k + 1), fill_value=False, dtype=bool)),
+                    (self.K7[:, : self.M - (k + 1)]),
                 ]
             )
         sum_potentials = np.sum(_j_j7.reshape(self.q, self.M, -1), axis=2)
