@@ -4,7 +4,7 @@ A melody generation system implementing a Maximum Entropy approach with the Isin
 It is based on the paper:
 Sakellariou, J., Tria, F., Loreto, V. et al. Maximum entropy models capture melodic styles. Sci Rep 7, 9172 (2017), which is available [here](https://www.nature.com/articles/s41598-017-08028-4).
 
-This model captures longer range interactions than Markov models (up to $K$) without the need for exponential amount of training data.
+This model captures longer range interactions than Markov models (up to $K$ both in the past and future) without the need for exponential amounts of training data.
 Number of parameters is $q + Kq^2$ where $q$ is the vocabulary size and $K$ is typically about 10.
 
 ## Authors
