@@ -74,6 +74,38 @@ The common approach to generate a sequence from a model trained on a training se
 You can also save the trained model to a file and load it later from a `SequenceGenerator` object. In this case, you need not train the model 
 again.  The example `examples/save_load_model.py` illustrate this.
 
+## Commented Example
+
+The following example shows how to generate a melody from a MIDI file containing a Bach violin partita. The model is trained on the pitches extracted from the MIDI file. The model is then used to generate a new sequence of 100 notes, which is saved to a new MIDI file.
+
+This example is also available in the file `examples/bach_partita.py`.
+
+```python
+# import helper functions to extract pitches from a MIDI file and save a MIDI file
+from mem.midi.midi import (
+   save_midi,
+   extract_pitches_from_midi,
+)
+
+# SequenceGenerator is the class that encapsulates the model
+from mem.training.generator import SequenceGenerator
+
+# extract pitches from a MIDI file
+midi_pitches = extract_pitches_from_midi("data/midi/bach_partita_violin.mid")
+
+# create a SequenceGenerator object from the extracted pitches
+g = SequenceGenerator(midi_pitches, k_max=1, fast=True)
+
+# train the model encapsulated in the SequenceGenerator object
+g.train(max_iter=10)
+
+# generate a sequence of 100 notes
+seq = g.sample_seq(100)
+
+# save the generated sequence to a MIDI file
+save_midi(seq, f"generated/bach-partita.mid")
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
