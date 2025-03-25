@@ -1,3 +1,16 @@
+"""
+Copyright (c) 2025 Ynosound.
+All rights reserved.
+
+See LICENSE file in the project root for full license information.
+
+A working version of the Max Entropy paper.
+Implementation follows the paper closely.
+Contexts are created only once, partition functions computed only when necessary
+negative_log_likelihood and gradient computed together (option jac=True in scipy.minimize),
+to reduce the number of computations needed
+"""
+
 import logging
 import random
 from typing import Self, Collection
@@ -9,21 +22,6 @@ from tqdm import trange
 
 from mem.algo import NDArrayFloat, NDArrayInt, IdxType
 
-"""
-Copyright (c) 2025 Ynosound.
-All rights reserved.
-
-Unauthorized copying, modification, or distribution of this software, in whole or in part, 
-is strictly prohibited without prior written consent from MyCompany.
-
-See LICENSE file in the project root for full license information.
-
-A working version of the Max Entropy paper.
-Implementation follows the paper closely.
-Contexts are created only once, partition functions computed only when necessary
-negative_log_likelihood and gradient computed together (option jac=True in scipy.minimize),
-to reduce the number of computations needed
-"""
 
 logger = logging.getLogger(__name__)
 logFormatter = logging.Formatter(
