@@ -1,6 +1,10 @@
 # Project folders to ignore
 models/
 generated/
+.DS_Store
+/data/maxent-generated_melody.mid
+/examples/model.npz
+/examples/*.mid
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
